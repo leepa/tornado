@@ -23,6 +23,7 @@ import logging
 import os
 import select
 import time
+import sys
 
 
 class IOLoop(object):
@@ -90,12 +91,13 @@ class IOLoop(object):
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
-        r, w = os.pipe()
-        self._set_nonblocking(r)
-        self._set_nonblocking(w)
-        self._waker_reader = os.fdopen(r, "r", 0)
-        self._waker_writer = os.fdopen(w, "w", 0)
-        self.add_handler(r, self._read_waker, self.WRITE)
+        if 'sunos5' not in sys.platform:
+            r, w = os.pipe()
+            self._set_nonblocking(r)
+            self._set_nonblocking(w)
+            self._waker_reader = os.fdopen(r, "r", 0)
+            self._waker_writer = os.fdopen(w, "w", 0)
+            self.add_handler(r, self._read_waker, self.WRITE)
 
     @classmethod
     def instance(cls):
@@ -250,10 +252,11 @@ class IOLoop(object):
         self._callbacks.remove(callback)
 
     def _wake(self):
-        try:
-            self._waker_writer.write("x")
-        except IOError:
-            pass
+        if 'sunos5' not in sys.platform:
+            try:
+                self._waker_writer.write("x")
+            except IOError:
+                pass
 
     def _run_callback(self, callback):
         try:
@@ -434,7 +437,6 @@ else:
         _poll = _EPoll
     except:
         # All other systems
-        import sys
         if "linux" in sys.platform:
             logging.warning("epoll module not found; using select()")
         _poll = _Select
