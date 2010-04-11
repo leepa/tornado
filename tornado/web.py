@@ -339,6 +339,7 @@ class RequestHandler(object):
         css_embed = []
         css_files = []
         html_heads = []
+        html_bodies = []
         for module in getattr(self, "_active_modules", {}).itervalues():
             embed_part = module.embedded_javascript()
             if embed_part: js_embed.append(_utf8(embed_part))
@@ -358,6 +359,8 @@ class RequestHandler(object):
                     css_files.extend(file_part)
             head_part = module.html_head()
             if head_part: html_heads.append(_utf8(head_part))
+            body_part = module.html_body()
+            if body_part: html_bodies.append(_utf8(body_part))
         if js_files:
             # Maintain order of JavaScript files given by modules
             paths = []
@@ -398,7 +401,9 @@ class RequestHandler(object):
         if html_heads:
             hloc = html.index('</head>')
             html = html[:hloc] + ''.join(html_heads) + '\n' + html[hloc:]
-
+        if html_bodies:
+            hloc = html.index('</body>')
+            html = html[:hloc] + ''.join(html_bodies) + '\n' + html[hloc:]
         self.finish(html)
 
     def render_string(self, template_name, **kwargs):
@@ -934,7 +939,15 @@ class Application(object):
         if not host_pattern.endswith("$"):
             host_pattern += "$"
         handlers = []
-        self.handlers.append((re.compile(host_pattern), handlers))
+        # The handlers with the wildcard host_pattern are a special
+        # case - they're added in the constructor but should have lower
+        # precedence than the more-precise handlers added later.
+        # If a wildcard handler group exists, it should always be last
+        # in the list, so insert new groups just before it.
+        if self.handlers and self.handlers[-1][0].pattern == '.*$':
+            self.handlers.insert(-1, (re.compile(host_pattern), handlers))
+        else:
+            self.handlers.append((re.compile(host_pattern), handlers))
 
         for spec in host_handlers:
             if type(spec) is type(()):
@@ -948,6 +961,10 @@ class Application(object):
                 spec = URLSpec(pattern, handler, kwargs)
             handlers.append(spec)
             if spec.name:
+                if spec.name in self.named_handlers:
+                    _log.warning(
+                        "Multiple handlers named %s; replacing previous value",
+                        spec.name)
                 self.named_handlers[spec.name] = spec
 
     def add_transform(self, transform_class):
@@ -1105,7 +1122,7 @@ class StaticFileHandler(RequestHandler):
     """
     def __init__(self, application, request, path):
         RequestHandler.__init__(self, application, request)
-        self.root = os.path.abspath(path) + "/"
+        self.root = os.path.abspath(path) + os.path.sep
 
     def head(self, path):
         self.get(path, include_body=False)
@@ -1146,7 +1163,7 @@ class StaticFileHandler(RequestHandler):
         if not include_body:
             return
         self.set_header("Content-Length", stat_result[stat.ST_SIZE])
-        file = open(abspath, "r")
+        file = open(abspath, "rb")
         try:
             self.write(file.read())
         finally:
@@ -1319,6 +1336,10 @@ class UIModule(object):
 
     def html_head(self):
         """Returns a CSS string that will be put in the <head/> element"""
+        return None
+
+    def html_body(self):
+        """Returns an HTML string that will be put in the <body/> element"""
         return None
 
     def render_string(self, path, **kwargs):
