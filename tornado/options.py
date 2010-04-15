@@ -384,3 +384,6 @@ define("log_file_max_size", type=int, default=100 * 1000 * 1000,
        help="max size of log files before rollover")
 define("log_file_num_backups", type=int, default=10,
        help="number of log files to keep")
+define("curl_ca_file", type=str, default=None,
+        help=("Set a CA file for pycurl (httpclient) for machines that need "
+            "one. Chances are the default is just fine."))

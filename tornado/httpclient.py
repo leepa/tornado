@@ -29,6 +29,8 @@ import pycurl
 import time
 import weakref
 
+from tornado.options import options
+
 _log = logging.getLogger('tornado.httpclient')
 
 class HTTPClient(object):
@@ -347,6 +349,18 @@ def _curl_create(max_simultaneous_connections=None):
         curl.setopt(pycurl.VERBOSE, 1)
         curl.setopt(pycurl.DEBUGFUNCTION, _curl_debug)
     curl.setopt(pycurl.MAXCONNECTS, max_simultaneous_connections or 5)
+    
+    # To set up a ca file if you're not using options normally in your app
+    # you'll need to do something like this. It'll globablly set it, so it's
+    # not that awful.
+    # 
+    # from tornado.options import options
+    # 
+    #     option = options['curl_ca_file']
+    #     option.set('flibble.crt')
+    #     
+    if options.curl_ca_file:
+        curl.setopt(pycurl.CAINFO, options.curl_ca_file)
     return curl
 
 
