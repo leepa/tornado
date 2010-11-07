@@ -83,12 +83,11 @@ from __future__ import with_statement
 
 import cStringIO
 import datetime
-import escape
 import logging
 import os.path
 import re
 
-_log = logging.getLogger('tornado.template')
+from tornado import escape
 
 class Template(object):
     """A compiled template.
@@ -109,13 +108,14 @@ class Template(object):
             self.compiled = compile(self.code, self.name, "exec")
         except:
             formatted_code = _format_code(self.code).rstrip()
-            _log.error("%s code:\n%s", self.name, formatted_code)
+            logging.error("%s code:\n%s", self.name, formatted_code)
             raise
 
     def generate(self, **kwargs):
         """Generate this template with the given arguments."""
         namespace = {
             "escape": escape.xhtml_escape,
+            "xhtml_escape": escape.xhtml_escape,
             "url_escape": escape.url_escape,
             "json_encode": escape.json_encode,
             "squeeze": escape.squeeze,
@@ -128,7 +128,7 @@ class Template(object):
             return execute()
         except:
             formatted_code = _format_code(self.code).rstrip()
-            _log.error("%s code:\n%s", self.name, formatted_code)
+            logging.error("%s code:\n%s", self.name, formatted_code)
             raise
 
     def _generate_python(self, loader, compress_whitespace):
@@ -171,7 +171,7 @@ class Loader(object):
         self.templates = {}
 
     def reset(self):
-      self.templates = {}
+        self.templates = {}
 
     def resolve_path(self, name, parent_path=None):
         if parent_path and not parent_path.startswith("<") and \
@@ -429,7 +429,7 @@ class _TemplateReader(object):
     def __getitem__(self, key):
         if type(key) is slice:
             size = len(self)
-            start, stop, step = slice.indices(size)
+            start, stop, step = key.indices(size)
             if start is None: start = self.pos
             else: start += self.pos
             if stop is not None: stop += self.pos

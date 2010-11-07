@@ -43,15 +43,11 @@ import csv
 import datetime
 import logging
 import os
-import os.path
-import re
 
 _default_locale = "en_US"
 _translations = {}
 _supported_locales = frozenset([_default_locale])
 _use_gettext = False
-
-_log = logging.getLogger('tornado.locale')
 
 def get(*locale_codes):
     """Returns the closest match for the given locale codes.
@@ -112,7 +108,7 @@ def load_translations(directory):
         if not path.endswith(".csv"): continue
         locale, extension = path.split(".")
         if locale not in LOCALE_NAMES:
-            _log.error("Unrecognized locale %r (path: %s)", locale,
+            logging.error("Unrecognized locale %r (path: %s)", locale,
                           os.path.join(directory, path))
             continue
         f = open(os.path.join(directory, path), "r")
@@ -126,13 +122,13 @@ def load_translations(directory):
             else:
                 plural = "unknown"
             if plural not in ("plural", "singular", "unknown"):
-                _log.error("Unrecognized plural indicator %r in %s line %d",
+                logging.error("Unrecognized plural indicator %r in %s line %d",
                               plural, path, i + 1)
                 continue
             _translations[locale].setdefault(plural, {})[english] = translation
         f.close()
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
-    _log.info("Supported locales: %s", sorted(_supported_locales))
+    logging.info("Supported locales: %s", sorted(_supported_locales))
 
 def load_gettext_translations(directory, domain):
     """Loads translations from gettext's locale tree
@@ -168,7 +164,7 @@ def load_gettext_translations(directory, domain):
             continue
     _supported_locales = frozenset(_translations.keys() + [_default_locale])
     _use_gettext = True
-    _log.info("Supported locales: %s", sorted(_supported_locales))
+    logging.info("Supported locales: %s", sorted(_supported_locales))
 
 
 def get_supported_locales(cls):
@@ -246,15 +242,24 @@ class Locale(object):
 
         You can force a full format date ("July 10, 1980") with
         full_format=True.
+
+        This method is primarily intended for dates in the past.
+        For dates in the future, we fall back to full format.
         """
         if self.code.startswith("ru"):
             relative = False
         if type(date) in (int, long, float):
             date = datetime.datetime.utcfromtimestamp(date)
         now = datetime.datetime.utcnow()
-        # Round down to now. Due to click skew, things are somethings
-        # slightly in the future.
-        if date > now: date = now
+        if date > now:
+            if relative and (date - now).seconds < 60:
+                # Due to click skew, things are some things slightly
+                # in the future. Round timestamps in the immediate
+                # future down to now in relative mode.
+                date = now
+            else:
+                # Otherwise, future dates always use the full format.
+                full_format = True
         local_date = date - datetime.timedelta(minutes=gmt_offset)
         local_now = now - datetime.timedelta(minutes=gmt_offset)
         local_yesterday = local_now - datetime.timedelta(hours=24)
